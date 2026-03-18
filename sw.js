@@ -1,4 +1,4 @@
-const CACHE_NAME = 'giftwave-v6';
+const CACHE_NAME = 'giftwave-v10-FORCE';
 
 self.addEventListener('install', (event) => {
   // Форсируем активацию нового SW немедленно
