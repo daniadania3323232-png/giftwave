@@ -6,7 +6,7 @@ import { Info, Phone, Video, Search, ChevronLeft, Gift, Smile } from 'lucide-rea
 
 export default function ChatWindow() {
   const { user, allUsers } = useAuth();
-  const { messages, chats, activeChatId, setActiveChatId, applyEffect, activeEffects, sendMessage, toggleReaction } = useChat();
+  const { messages, chats, activeChatId, setActiveChatId, applyEffect, activeEffects, sendMessage, toggleReaction, joinChat } = useChat();
   const scrollRef = useRef();
   const processedGifts = useRef(new Set());
   
@@ -258,6 +258,8 @@ export default function ChatWindow() {
                     ? 'gift-bubble border border-zinc-800/50 py-3'
                     : msg.type === 'call'
                       ? 'bg-blue-600/20 border border-blue-500/30 text-blue-300'
+                      : msg.type === 'invite'
+                        ? 'bg-violet-600/15 border border-violet-500/30 text-violet-100'
                       : msg.type === 'image' || msg.type === 'video'
                         ? 'p-1.5 bg-zinc-800/80 border border-zinc-700/30'
                         : isMe 
@@ -321,6 +323,33 @@ export default function ChatWindow() {
                         <Phone className="w-4 h-4 text-emerald-500" />
                       </div>
                       <audio src={msg.metadata.url} controls className="h-8 w-full custom-audio-player" />
+                    </div>
+                  )}
+
+                  {msg.type === 'invite' && (
+                    <div className="space-y-2 min-w-[220px]">
+                      <div className="text-xs text-violet-200/80">
+                        {msg.metadata?.invitedByName || msg.senderName} приглашает вас в {msg.metadata?.targetChatType === 'group' ? 'группу' : 'канал'}
+                      </div>
+                      <div className="text-sm font-semibold text-violet-100">
+                        {msg.metadata?.targetChatName || 'Сообщество'}
+                      </div>
+                      {msg.metadata?.inviteUrl && (
+                        <a
+                          href={msg.metadata.inviteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-[11px] text-violet-300 hover:text-violet-200 underline break-all"
+                        >
+                          {msg.metadata.inviteUrl}
+                        </a>
+                      )}
+                      <button
+                        onClick={() => joinChat(msg.metadata?.targetChatId)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-violet-500/30 hover:bg-violet-500/40 text-violet-100 border border-violet-400/40"
+                      >
+                        Вступить
+                      </button>
                     </div>
                   )}
 

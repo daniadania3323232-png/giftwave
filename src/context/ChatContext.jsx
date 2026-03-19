@@ -188,11 +188,11 @@ export function ChatProvider({ children }) {
     setActiveChatId(docRef.id);
   };
 
-  const sendMessage = async (text, type = 'text', metadata = {}) => {
-    if (!user || !activeChatId) return;
+  const sendMessageToChat = async (chatId, text, type = 'text', metadata = {}) => {
+    if (!user || !chatId) return;
 
     const messageData = {
-      chatId: activeChatId,
+      chatId,
       text,
       senderId: user.id,
       senderName: user.username,
@@ -201,13 +201,17 @@ export function ChatProvider({ children }) {
       timestamp: serverTimestamp()
     };
 
-    await addDoc(collection(db, `chats/${activeChatId}/messages`), messageData);
+    await addDoc(collection(db, `chats/${chatId}/messages`), messageData);
     
-    // Обновляем последнее сообщение в чате
-    await updateDoc(doc(db, 'chats', activeChatId), {
+    await updateDoc(doc(db, 'chats', chatId), {
       lastMessage: text,
       lastUpdated: serverTimestamp()
     });
+  };
+
+  const sendMessage = async (text, type = 'text', metadata = {}) => {
+    if (!activeChatId) return;
+    await sendMessageToChat(activeChatId, text, type, metadata);
   };
 
   const applyEffect = (effectType, duration = 8000) => {
@@ -291,6 +295,37 @@ export function ChatProvider({ children }) {
     }
   };
 
+  const sendChatInvite = async (directChatId, communityChatId) => {
+    if (!user || !directChatId || !communityChatId) return;
+    try {
+      const directChat = chats.find((chat) => chat.id === directChatId && chat.type === 'dm');
+      const communityChat = getChatById(communityChatId);
+      if (!directChat || !communityChat || !['group', 'channel'].includes(communityChat.type)) return;
+
+      const { canManageMembers } = getChatAccess(communityChat);
+      if (!canManageMembers) return;
+
+      const inviteUrl = `${window.location.origin}${window.location.pathname}#invite=${communityChat.id}`;
+      const inviteType = communityChat.type === 'group' ? 'группу' : 'канал';
+
+      await sendMessageToChat(
+        directChatId,
+        `Приглашение в ${inviteType} «${communityChat.name}»`,
+        'invite',
+        {
+          targetChatId: communityChat.id,
+          targetChatName: communityChat.name,
+          targetChatType: communityChat.type,
+          inviteUrl,
+          invitedById: user.id,
+          invitedByName: user.displayName || user.username
+        }
+      );
+    } catch (e) {
+      console.error('Send invite error', e);
+    }
+  };
+
   const removeChatMember = async (chatId, userIdToRemove) => {
     if (!user || !chatId || !userIdToRemove) return;
     try {
@@ -357,6 +392,7 @@ export function ChatProvider({ children }) {
       createGroup,
       createChannel,
       joinChat,
+      sendChatInvite,
       addChatMembers,
       removeChatMember,
       updateChatSettings,

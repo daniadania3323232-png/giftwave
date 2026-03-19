@@ -16,14 +16,15 @@ import {
   ShieldAlert,
   Terminal,
   RefreshCcw,
-  UserPlus
+  UserPlus,
+  Send
 } from 'lucide-react';
 import Modal from './Modal';
 import { uploadToCloudinary } from '../utils/cloudinary';
 
 export default function Sidebar() {
   const { user, allUsers, logout, updateUser, giveCoins } = useAuth();
-  const { chats, availableCommunities, activeChatId, setActiveChatId, startPrivateChat, createGroup, createChannel, joinChat, addChatMembers, removeChatMember, updateChatSettings, deleteChat } = useChat();
+  const { chats, availableCommunities, activeChatId, setActiveChatId, startPrivateChat, createGroup, createChannel, joinChat, sendChatInvite, removeChatMember, updateChatSettings, deleteChat } = useChat();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('messages');
   
@@ -51,9 +52,9 @@ export default function Sidebar() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [isManageChatOpen, setIsManageChatOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [manageChatId, setManageChatId] = useState(null);
   const [manageChatName, setManageChatName] = useState('');
-  const [memberToAddId, setMemberToAddId] = useState('');
   const [selectedAdminIds, setSelectedAdminIds] = useState([]);
   const [adminPermissions, setAdminPermissions] = useState({
     manageInfo: true,
@@ -83,7 +84,11 @@ export default function Sidebar() {
   const isManagedAdmin = managedAdminIds.includes(user.id);
   const canManageInfo = isManagedOwner || (isManagedAdmin && managedPermissions.manageInfo);
   const canManageMembers = isManagedOwner || (isManagedAdmin && managedPermissions.manageMembers);
-  const usersForAdd = allUsers.filter((u) => !managedChat?.participants?.includes(u.id));
+  const personalChats = chats.filter((chat) => chat.type === 'dm');
+  const getDmCompanion = (chat) => {
+    const companionId = chat.participants?.find((id) => id !== user.id);
+    return allUsers.find((u) => u.id === companionId);
+  };
 
   const openManageChat = (chat) => {
     setManageChatId(chat.id);
@@ -94,7 +99,6 @@ export default function Sidebar() {
       manageMembers: chat.adminPermissions?.manageMembers ?? false,
       deleteMessages: chat.adminPermissions?.deleteMessages ?? false
     });
-    setMemberToAddId('');
     setIsManageChatOpen(true);
   };
 
@@ -123,10 +127,10 @@ export default function Sidebar() {
     setIsManageChatOpen(false);
   };
 
-  const handleAddMember = async () => {
-    if (!memberToAddId) return;
-    await addChatMembers(manageChatId, [memberToAddId]);
-    setMemberToAddId('');
+  const handleSendInvite = async (directChatId) => {
+    if (!manageChatId) return;
+    await sendChatInvite(directChatId, manageChatId);
+    setIsInviteModalOpen(false);
   };
 
   const handleUpdateProfile = async (e) => {
@@ -563,22 +567,15 @@ export default function Sidebar() {
 
             {canManageMembers && (
               <div className="space-y-2">
-                <label className="text-xs text-zinc-500">Добавить участника</label>
-                <div className="flex gap-2">
-                  <select
-                    value={memberToAddId}
-                    onChange={(e) => setMemberToAddId(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs outline-none focus:border-emerald-500/50"
-                  >
-                    <option value="">Выберите пользователя</option>
-                    {usersForAdd.map((u) => (
-                      <option key={u.id} value={u.id}>{u.displayName || u.username}</option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={handleAddMember} className="px-3 py-2 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-500">
-                    Добавить
-                  </button>
-                </div>
+                <label className="text-xs text-zinc-500">Приглашения</label>
+                <button
+                  type="button"
+                  onClick={() => setIsInviteModalOpen(true)}
+                  className="w-full px-3 py-2.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 flex items-center justify-center gap-2"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Отправить приглашение
+                </button>
               </div>
             )}
 
@@ -607,6 +604,32 @@ export default function Sidebar() {
             </button>
           </form>
         ) : null}
+      </Modal>
+
+      <Modal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="Отправить приглашение">
+        <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+          {personalChats.length === 0 && (
+            <div className="text-xs text-zinc-500 px-1">Нет личных чатов для отправки приглашения</div>
+          )}
+          {personalChats.map((chat) => {
+            const companion = getDmCompanion(chat);
+            return (
+              <div key={chat.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-zinc-800 bg-zinc-900/40">
+                <div className="min-w-0">
+                  <div className="text-xs text-zinc-200 truncate">{companion?.displayName || companion?.username || 'Пользователь'}</div>
+                  <div className="text-[10px] text-zinc-500 truncate">@{companion?.username || 'unknown'}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSendInvite(chat.id)}
+                  className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/10"
+                >
+                  Отправить
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </Modal>
 
       <Modal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} title="Настройки профиля">
