@@ -85,6 +85,36 @@ body {
   50% { opacity: 0.7; }
 }
 
+@keyframes effect-heart-rise {
+  0% { transform: translate3d(0, 0, 0) scale(0.8) rotate(0deg); opacity: 0; }
+  12% { opacity: 1; }
+  78% { opacity: 0.9; }
+  100% { transform: translate3d(var(--heart-drift, 0px), -115vh, 0) scale(1.18) rotate(18deg); opacity: 0; }
+}
+
+@keyframes effect-fire-wave {
+  0% { transform: translateY(14px) scaleY(0.9); opacity: 0.45; }
+  50% { transform: translateY(-6px) scaleY(1.08); opacity: 0.9; }
+  100% { transform: translateY(14px) scaleY(0.9); opacity: 0.45; }
+}
+
+@keyframes effect-fire-spark {
+  0% { transform: translate3d(0, 0, 0) scale(0.8); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translate3d(var(--spark-drift, 0px), -52vh, 0) scale(0.3); opacity: 0; }
+}
+
+@keyframes effect-star-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.75); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+
+@keyframes effect-shoot-star {
+  0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate3d(120vw, 45vh, 0) scale(0.3); opacity: 0; }
+}
+
 @keyframes slide-in-right {
   0% { transform: translateX(20px); opacity: 0; }
   100% { transform: translateX(0); opacity: 1; }
@@ -110,6 +140,57 @@ body {
 
 .animate-zoom-in {
   animation: zoom-in 0.2s ease-out forwards;
+}
+
+.effect-heart {
+  bottom: -12%;
+  animation: effect-heart-rise var(--heart-duration, 3s) ease-out var(--heart-delay, 0s) forwards;
+}
+
+.effect-heart svg {
+  width: var(--heart-size, 22px);
+  height: var(--heart-size, 22px);
+  filter: drop-shadow(0 0 10px rgba(251, 113, 133, 0.45));
+}
+
+.effect-fire-glow {
+  background:
+    radial-gradient(120% 70% at 50% 100%, rgba(251, 146, 60, 0.35) 0%, rgba(251, 146, 60, 0) 70%),
+    radial-gradient(90% 55% at 10% 100%, rgba(239, 68, 68, 0.22) 0%, rgba(239, 68, 68, 0) 72%),
+    radial-gradient(90% 55% at 90% 100%, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0) 72%);
+}
+
+.effect-fire-wave {
+  background: linear-gradient(to top, rgba(249, 115, 22, 0.25), rgba(251, 191, 36, 0.09), transparent);
+  filter: blur(10px);
+  animation: effect-fire-wave 1.3s ease-in-out infinite;
+}
+
+.effect-fire-spark {
+  bottom: 0;
+  width: var(--spark-size, 3px);
+  height: var(--spark-size, 3px);
+  border-radius: 999px;
+  background: rgba(254, 215, 170, 0.95);
+  box-shadow: 0 0 10px rgba(251, 146, 60, 0.85);
+  animation: effect-fire-spark var(--spark-duration, 1.6s) ease-out var(--spark-delay, 0s) infinite;
+}
+
+.effect-star-dot {
+  border-radius: 999px;
+  background: rgba(253, 224, 71, 0.95);
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.85);
+  animation: effect-star-twinkle var(--star-duration, 1.4s) ease-in-out var(--star-delay, 0s) infinite;
+}
+
+.effect-shooting-star {
+  width: 120px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(250, 204, 21, 0.95), rgba(255, 255, 255, 0));
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.75));
+  transform: rotate(-25deg);
+  animation: effect-shoot-star var(--shoot-duration, 1.4s) linear var(--shoot-delay, 0s) infinite;
 }
 
 /* Hover effects */
