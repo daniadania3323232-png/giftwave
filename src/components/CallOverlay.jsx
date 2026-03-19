@@ -4,6 +4,8 @@ import { useChat } from '../context/ChatContext';
 import { Phone, X } from 'lucide-react';
 
 const TERMINAL_STATUSES = ['declined', 'cancelled', 'ended', 'missed'];
+const RINGING_TTL_MS = 30000;
+const CONNECTING_TTL_MS = 120000;
 
 export default function CallOverlay() {
   const { user } = useAuth();
@@ -19,6 +21,20 @@ export default function CallOverlay() {
   const processedSignalsRef = useRef(new Set());
   const connectedCallIdRef = useRef(null);
   const pendingIceRef = useRef([]);
+  const staleClosedCallIdsRef = useRef(new Set());
+
+  const getCallTime = (msg) => {
+    const raw = msg?.metadata?.timestamp ?? msg?.metadata?.startedAt ?? msg?.timestamp;
+    if (raw && typeof raw.toMillis === 'function') return raw.toMillis();
+    if (typeof raw === 'number') return raw;
+    if (typeof raw === 'string') {
+      const numeric = Number(raw);
+      if (Number.isFinite(numeric)) return numeric;
+      const parsed = new Date(raw).getTime();
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+    return Date.now();
+  };
 
   const activeCall = useMemo(() => {
     if (!user || !activeChatId || !messages?.length) return null;
@@ -36,7 +52,15 @@ export default function CallOverlay() {
       byCallId.set(callId, msg);
     });
 
-    const activeCalls = Array.from(byCallId.values()).filter((msg) => !TERMINAL_STATUSES.includes(msg.metadata?.status));
+    const now = Date.now();
+    const activeCalls = Array.from(byCallId.values()).filter((msg) => {
+      const callStatus = msg.metadata?.status;
+      if (TERMINAL_STATUSES.includes(callStatus)) return false;
+      const age = now - getCallTime(msg);
+      if (callStatus === 'ringing' && age > RINGING_TTL_MS) return false;
+      if (['accepted', 'connected'].includes(callStatus) && age > CONNECTING_TTL_MS) return false;
+      return true;
+    });
     if (!activeCalls.length) return null;
     return activeCalls[activeCalls.length - 1];
   }, [user, activeChatId, messages]);
@@ -174,6 +198,46 @@ export default function CallOverlay() {
       return;
     }
   }, [activeCall, callId, status]);
+
+  useEffect(() => {
+    if (!user || !activeChatId || !messages?.length) return;
+
+    const byCallId = new Map();
+    messages.forEach((msg) => {
+      if (msg.type !== 'call' || !msg.metadata) return;
+      if (msg.metadata.chatId && msg.metadata.chatId !== activeChatId) return;
+      if (msg.metadata.callerId !== user.id && msg.metadata.targetId !== user.id) return;
+      const groupedCallId = msg.metadata.callId || msg.id;
+      byCallId.set(groupedCallId, msg);
+    });
+
+    const now = Date.now();
+    byCallId.forEach((callMsg, groupedCallId) => {
+      if (staleClosedCallIdsRef.current.has(groupedCallId)) return;
+      const callStatus = callMsg.metadata?.status;
+      if (TERMINAL_STATUSES.includes(callStatus)) return;
+      const age = now - getCallTime(callMsg);
+      const isRingingExpired = callStatus === 'ringing' && age > RINGING_TTL_MS;
+      const isAcceptedExpired = ['accepted', 'connected'].includes(callStatus) && age > CONNECTING_TTL_MS;
+      if (!isRingingExpired && !isAcceptedExpired) return;
+
+      staleClosedCallIdsRef.current.add(groupedCallId);
+      const isOutgoing = callMsg.metadata?.callerId === user.id;
+      const nextStatus = isRingingExpired ? (isOutgoing ? 'cancelled' : 'missed') : 'ended';
+      sendMessage(
+        '',
+        'call',
+        {
+          ...callMsg.metadata,
+          callId: groupedCallId,
+          status: nextStatus,
+          timestamp: Date.now()
+        }
+      ).catch(() => {
+        staleClosedCallIdsRef.current.delete(groupedCallId);
+      });
+    });
+  }, [user, activeChatId, messages, sendMessage]);
 
   useEffect(() => {
     if (!activeCall || !callId || !isCaller || status !== 'accepted') return;
@@ -401,6 +465,14 @@ export default function CallOverlay() {
               ? 'Идет реальное соединение'
               : 'Управление звонком'}
         </div>
+        {!TERMINAL_STATUSES.includes(status) && (
+          <button
+            onClick={() => handleUpdateStatus(forceCloseStatus)}
+            className="mt-1 text-xs text-zinc-300 hover:text-white underline underline-offset-4"
+          >
+            Завершить звонок
+          </button>
+        )}
       </div>
     </div>
   );
