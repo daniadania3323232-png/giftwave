@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { Phone, X } from 'lucide-react';
 
+const TERMINAL_STATUSES = ['declined', 'cancelled', 'ended', 'missed'];
+
 export default function CallOverlay() {
   const { user } = useAuth();
   const { messages, activeChatId, sendMessage } = useChat();
@@ -34,8 +36,7 @@ export default function CallOverlay() {
       byCallId.set(callId, msg);
     });
 
-    const terminalStatuses = ['declined', 'cancelled', 'ended', 'missed'];
-    const activeCalls = Array.from(byCallId.values()).filter((msg) => !terminalStatuses.includes(msg.metadata?.status));
+    const activeCalls = Array.from(byCallId.values()).filter((msg) => !TERMINAL_STATUSES.includes(msg.metadata?.status));
     if (!activeCalls.length) return null;
     return activeCalls[activeCalls.length - 1];
   }, [user, activeChatId, messages]);
@@ -103,7 +104,18 @@ export default function CallOverlay() {
     if (!callId || !targetId) return null;
     if (peerRef.current) return peerRef.current;
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+    } catch (error) {
+      await handleUpdateStatus(isCaller ? 'cancelled' : 'declined');
+      alert(
+        isVideo
+          ? 'Нет доступа к микрофону или камере. Разрешите доступ к устройствам в браузере.'
+          : 'Нет доступа к микрофону. Разрешите доступ к микрофону в браузере.'
+      );
+      throw error;
+    }
     setLocalStream(stream);
 
     const peer = new RTCPeerConnection({
@@ -157,8 +169,7 @@ export default function CallOverlay() {
       return;
     }
 
-    const terminalStatuses = ['declined', 'cancelled', 'ended', 'missed'];
-    if (terminalStatuses.includes(status)) {
+    if (TERMINAL_STATUSES.includes(status)) {
       cleanupConnection();
       return;
     }
@@ -203,11 +214,12 @@ export default function CallOverlay() {
     const processSignals = async () => {
       for (const signalMsg of signals) {
         if (processedSignalsRef.current.has(signalMsg.id)) continue;
-        processedSignalsRef.current.add(signalMsg.id);
         const data = signalMsg.metadata;
+        let handled = false;
 
         try {
           if (data.signalType === 'offer') {
+            if (isCaller || status !== 'accepted') continue;
             const peer = await ensurePeerConnection();
             if (!peer) continue;
             await peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -225,22 +237,31 @@ export default function CallOverlay() {
               const candidate = pendingIceRef.current.shift();
               await peer.addIceCandidate(new RTCIceCandidate(candidate));
             }
+            handled = true;
           }
 
           if (data.signalType === 'answer' && peerRef.current) {
+            if (!isCaller || !['accepted', 'connected'].includes(status)) continue;
             await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
             while (pendingIceRef.current.length) {
               const candidate = pendingIceRef.current.shift();
               await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
             }
+            handled = true;
           }
 
           if (data.signalType === 'ice') {
+            if (!['accepted', 'connected'].includes(status)) continue;
             if (!peerRef.current || !peerRef.current.remoteDescription) {
               pendingIceRef.current.push(data.candidate);
             } else {
               await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
             }
+            handled = true;
+          }
+
+          if (handled) {
+            processedSignalsRef.current.add(signalMsg.id);
           }
         } catch (e) {
           console.error('Signal processing error', e);
@@ -249,7 +270,7 @@ export default function CallOverlay() {
     };
 
     processSignals();
-  }, [messages, activeCall, callId]);
+  }, [messages, activeCall, callId, isCaller, status]);
 
   useEffect(() => {
     if (localVideoRef.current) {
@@ -270,10 +291,20 @@ export default function CallOverlay() {
   }, []);
 
   useEffect(() => {
-    if (!activeCall || status !== 'ringing' || !isCaller) return;
+    if (!activeCall || status !== 'ringing') return;
+    const startedAt = Number(activeCall.metadata?.startedAt || activeCall.metadata?.timestamp || Date.now());
+    const elapsed = Date.now() - startedAt;
+    const timeoutMs = Math.max(0, 30000 - elapsed);
+    const finalStatus = isCaller ? 'cancelled' : 'missed';
+
+    if (timeoutMs === 0) {
+      handleUpdateStatus(finalStatus);
+      return;
+    }
+
     const timeout = setTimeout(() => {
-      handleUpdateStatus('cancelled');
-    }, 30000);
+      handleUpdateStatus(finalStatus);
+    }, timeoutMs);
     return () => clearTimeout(timeout);
   }, [activeCall, status, isCaller]);
 
@@ -283,6 +314,8 @@ export default function CallOverlay() {
   const canDecline = !isCaller && ['ringing', 'accepted'].includes(status);
   const canCancel = isCaller && status === 'ringing';
   const canEnd = ['accepted', 'connected'].includes(status);
+  const canForceClose = !TERMINAL_STATUSES.includes(status) && !canAccept && !canDecline && !canCancel && !canEnd;
+  const forceCloseStatus = status === 'ringing' ? (isCaller ? 'cancelled' : 'declined') : 'ended';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -351,6 +384,14 @@ export default function CallOverlay() {
               <Phone className="w-7 h-7 rotate-135" />
             </button>
           )}
+          {canForceClose && (
+            <button
+              onClick={() => handleUpdateStatus(forceCloseStatus)}
+              className="w-16 h-16 rounded-full bg-red-600 shadow-red-600/40 flex items-center justify-center text-white shadow-lg"
+            >
+              <Phone className="w-7 h-7 rotate-135" />
+            </button>
+          )}
         </div>
 
         <div className="text-[10px] text-zinc-500 uppercase tracking-widest mt-4">
@@ -364,4 +405,3 @@ export default function CallOverlay() {
     </div>
   );
 }
-
