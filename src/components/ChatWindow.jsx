@@ -21,6 +21,7 @@ export default function ChatWindow() {
   const opponent = allUsers.find(u => u.id === opponentId);
 
   const chatName = isDirectChat ? (opponent ? (opponent.displayName || opponent.username) : (activeChat?.name || "Чат")) : (activeChat?.name || "Чат");
+  const chatUsername = isDirectChat ? (opponent?.username ? `@${opponent.username}` : '') : '';
   const chatAvatar = opponent ? opponent.avatar : null;
   const isOnline = opponent?.lastSeen === 'online';
   const membersCount = activeChat?.participants?.length || 0;
@@ -138,6 +139,9 @@ export default function ChatWindow() {
             className="min-w-0 cursor-pointer"
           >
             <div className="text-sm font-semibold text-zinc-100 truncate hover:text-emerald-500 transition-colors">{chatName}</div>
+            {isDirectChat && chatUsername && (
+              <div className="text-[10px] text-zinc-500 truncate">{chatUsername}</div>
+            )}
             <div className={`text-[10px] flex items-center gap-1 ${isDirectChat && isOnline ? 'text-emerald-500' : 'text-zinc-500'}`}>
               {isDirectChat && isOnline ? (
                 <>
@@ -195,6 +199,7 @@ export default function ChatWindow() {
                 {chatAvatar ? <img src={chatAvatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-emerald-500">{chatName[0].toUpperCase()}</div>}
               </div>
               <h3 className="text-lg font-bold text-zinc-100">{chatName}</h3>
+              {isDirectChat && chatUsername && <p className="text-xs text-zinc-400 mb-1">{chatUsername}</p>}
               <p className="text-xs text-zinc-500 mb-4">{chatStatus}</p>
               
               <div className="w-full space-y-3">

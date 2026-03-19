@@ -293,6 +293,7 @@ export default function Sidebar() {
               const otherUserId = chat.participants?.find(id => id !== user.id);
               const otherUser = chat.type === 'dm' ? allUsers.find(u => u.id === otherUserId) : null;
               const chatDisplayName = otherUser ? (otherUser.displayName || otherUser.username) : chat.name;
+              const chatUsername = otherUser?.username ? `@${otherUser.username}` : '';
               const chatAvatar = otherUser ? otherUser.avatar : null;
               const isOnline = otherUser?.lastSeen === 'online';
               const memberCount = chat.participants?.length || 0;
@@ -332,7 +333,11 @@ export default function Sidebar() {
                     </div>
                     <div className="text-left flex-1 min-w-0">
                       <div className="text-sm font-medium text-zinc-200 truncate">{chatDisplayName}</div>
-                      <div className="text-xs text-zinc-500 truncate">{chat.type === 'dm' ? (chat.lastMessage || 'Нет сообщений') : communityStatus}</div>
+                      <div className="text-xs text-zinc-500 truncate">
+                        {chat.type === 'dm'
+                          ? (chatUsername || chat.lastMessage || 'Нет сообщений')
+                          : communityStatus}
+                      </div>
                     </div>
                   </button>
                   {canManageChat && (
