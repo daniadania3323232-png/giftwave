@@ -36,11 +36,13 @@ export default function ChatWindow() {
 
   // Фильтрация сообщений при поиске
   const filteredMessages = useMemo(() => {
-    if (!searchQuery) return messages;
-    return messages.filter(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()));
+    const visibleMessages = messages.filter((m) => m.type !== 'call-signal');
+    if (!searchQuery) return visibleMessages;
+    return visibleMessages.filter(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [messages, searchQuery]);
 
   const handleCall = async (type) => {
+    const callId = `call_${Date.now()}_${user.id}`;
     const icon = type === 'video' ? '📹' : '📞';
     const text = type === 'video' ? 'видеозвонок' : 'голосовой звонок';
     // Проверяем доступ к микрофону перед звонком
@@ -63,12 +65,14 @@ export default function ChatWindow() {
     
     // Сразу отправляем сообщение о звонке (статус «звонит»)
     await sendMessage(`${icon} ${user.displayName} начал ${text}!`, 'call', {
+      callId,
       callType: type,
       callerId: user.id,
       callerName: user.displayName,
       targetId: participantId,
       timestamp: Date.now(),
       status: 'ringing',
+      startedAt: Date.now(),
       chatId: activeChatId
     });
   };
