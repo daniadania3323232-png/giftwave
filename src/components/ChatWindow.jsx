@@ -15,14 +15,22 @@ export default function ChatWindow() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const activeChat = chats.find(c => c.id === activeChatId);
+  const isDirectChat = activeChat?.type === 'dm';
   
-  // ULTRA-RELIABLE opponent lookup
   const opponentId = activeChat?.participants?.find(id => id !== user.id);
   const opponent = allUsers.find(u => u.id === opponentId);
 
-  const chatName = opponent ? (opponent.displayName || opponent.username) : (activeChat?.name || "Чат");
+  const chatName = isDirectChat ? (opponent ? (opponent.displayName || opponent.username) : (activeChat?.name || "Чат")) : (activeChat?.name || "Чат");
   const chatAvatar = opponent ? opponent.avatar : null;
   const isOnline = opponent?.lastSeen === 'online';
+  const membersCount = activeChat?.participants?.length || 0;
+  const chatStatus = isDirectChat
+    ? (isOnline
+      ? 'В сети'
+      : (opponent?.lastSeen ? `Был(а) ${new Date(opponent.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Не в сети'))
+    : (activeChat?.type === 'group'
+      ? `${membersCount} участников`
+      : `${membersCount} подписчиков`);
 
   // Фильтрация сообщений при поиске
   const filteredMessages = useMemo(() => {
@@ -44,7 +52,7 @@ export default function ChatWindow() {
 
     // Находим собеседника
     const chat = chats.find(c => c.id === activeChatId);
-    if (!chat) return;
+    if (!chat || chat.type !== 'dm') return;
     
     const participantId = chat.participants.find(id => id !== user.id);
     const targetUser = allUsers.find(u => u.id === participantId);
@@ -130,16 +138,16 @@ export default function ChatWindow() {
             className="min-w-0 cursor-pointer"
           >
             <div className="text-sm font-semibold text-zinc-100 truncate hover:text-emerald-500 transition-colors">{chatName}</div>
-            <div className={`text-[10px] flex items-center gap-1 ${isOnline ? 'text-emerald-500' : 'text-zinc-500'}`}>
-              {isOnline ? (
+            <div className={`text-[10px] flex items-center gap-1 ${isDirectChat && isOnline ? 'text-emerald-500' : 'text-zinc-500'}`}>
+              {isDirectChat && isOnline ? (
                 <>
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  В сети
+                  {chatStatus}
                 </>
               ) : (
                 <>
                   <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full" />
-                  {opponent?.lastSeen ? `Был(а) ${new Date(opponent.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Не в сети'}
+                  {chatStatus}
                 </>
               )}
             </div>
@@ -164,40 +172,44 @@ export default function ChatWindow() {
               <Search className="w-4 h-4" />
             </button>
           )}
-          <button onClick={() => handleCall('audio')} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500">
-            <Phone className="w-4 h-4" />
-          </button>
-          <button onClick={() => handleCall('video')} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500">
-            <Video className="w-4 h-4" />
-          </button>
+          {isDirectChat && (
+            <>
+              <button onClick={() => handleCall('audio')} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500">
+                <Phone className="w-4 h-4" />
+              </button>
+              <button onClick={() => handleCall('video')} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500">
+                <Video className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Profile Modal */}
-      {isProfileModalOpen && opponent && (
+      {isProfileModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="w-full max-w-xs bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl animate-zoom-in">
             <div className="h-24 bg-gradient-to-br from-emerald-600/20 to-zinc-900" />
             <div className="px-6 pb-6 -mt-12 flex flex-col items-center">
               <div className="w-24 h-24 rounded-3xl bg-zinc-800 border-4 border-zinc-900 overflow-hidden shadow-xl mb-3">
-                {opponent.avatar ? <img src={opponent.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-emerald-500">{opponent.username[0].toUpperCase()}</div>}
+                {chatAvatar ? <img src={chatAvatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-emerald-500">{chatName[0].toUpperCase()}</div>}
               </div>
-              <h3 className="text-lg font-bold text-zinc-100">{opponent.displayName || opponent.username}</h3>
-              <p className="text-xs text-zinc-500 mb-4">@{opponent.username}</p>
+              <h3 className="text-lg font-bold text-zinc-100">{chatName}</h3>
+              <p className="text-xs text-zinc-500 mb-4">{chatStatus}</p>
               
               <div className="w-full space-y-3">
                 <div className="p-3 bg-zinc-800/50 rounded-2xl border border-zinc-700/30">
                   <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">О себе</div>
-                  <p className="text-sm text-zinc-300 leading-relaxed">{opponent.bio || 'Этот пользователь не заполнил раздел "О себе"'}</p>
+                  <p className="text-sm text-zinc-300 leading-relaxed">{isDirectChat ? (opponent?.bio || 'Этот пользователь не заполнил раздел "О себе"') : 'Информация о сообществе доступна в управлении чатом.'}</p>
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1 p-3 bg-zinc-800/50 rounded-2xl border border-zinc-700/30 text-center">
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Монеты</div>
-                    <div className="text-sm font-bold text-emerald-500">🪙 {opponent.coins || 0}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{isDirectChat ? 'Монеты' : 'Участники'}</div>
+                    <div className="text-sm font-bold text-emerald-500">{isDirectChat ? `🪙 ${opponent?.coins || 0}` : membersCount}</div>
                   </div>
                   <div className="flex-1 p-3 bg-zinc-800/50 rounded-2xl border border-zinc-700/30 text-center">
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Ранг</div>
-                    <div className="text-sm font-bold text-amber-500 uppercase">{opponent.role || 'user'}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{isDirectChat ? 'Ранг' : 'Тип'}</div>
+                    <div className="text-sm font-bold text-amber-500 uppercase">{isDirectChat ? (opponent?.role || 'user') : activeChat?.type}</div>
                   </div>
                 </div>
               </div>

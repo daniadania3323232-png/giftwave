@@ -15,14 +15,15 @@ import {
   Check,
   ShieldAlert,
   Terminal,
-  RefreshCcw
+  RefreshCcw,
+  UserPlus
 } from 'lucide-react';
 import Modal from './Modal';
 import { uploadToCloudinary } from '../utils/cloudinary';
 
 export default function Sidebar() {
   const { user, allUsers, logout, updateUser, giveCoins } = useAuth();
-  const { chats, activeChatId, setActiveChatId, startPrivateChat, createGroup, createChannel, deleteChat } = useChat();
+  const { chats, availableCommunities, activeChatId, setActiveChatId, startPrivateChat, createGroup, createChannel, joinChat, addChatMembers, removeChatMember, updateChatSettings, deleteChat } = useChat();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('messages');
   
@@ -49,6 +50,84 @@ export default function Sidebar() {
   const [profileNameColor, setProfileNameColor] = useState(user.nameColor || '#ffffff');
   const [avatarFile, setAvatarFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [isManageChatOpen, setIsManageChatOpen] = useState(false);
+  const [manageChatId, setManageChatId] = useState(null);
+  const [manageChatName, setManageChatName] = useState('');
+  const [memberToAddId, setMemberToAddId] = useState('');
+  const [selectedAdminIds, setSelectedAdminIds] = useState([]);
+  const [adminPermissions, setAdminPermissions] = useState({
+    manageInfo: true,
+    manageMembers: false,
+    deleteMessages: false
+  });
+
+  const pluralize = (count, one, few, many) => {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+    return many;
+  };
+
+  const managedChat = chats.find(chat => chat.id === manageChatId) || null;
+  const managedMembers = (managedChat?.participants || [])
+    .map((memberId) => allUsers.find((u) => u.id === memberId))
+    .filter(Boolean);
+  const managedAdminIds = managedChat?.adminIds || [managedChat?.ownerId].filter(Boolean);
+  const managedPermissions = {
+    manageInfo: managedChat?.adminPermissions?.manageInfo ?? true,
+    manageMembers: managedChat?.adminPermissions?.manageMembers ?? false,
+    deleteMessages: managedChat?.adminPermissions?.deleteMessages ?? false
+  };
+  const isManagedOwner = managedChat?.ownerId === user.id;
+  const isManagedAdmin = managedAdminIds.includes(user.id);
+  const canManageInfo = isManagedOwner || (isManagedAdmin && managedPermissions.manageInfo);
+  const canManageMembers = isManagedOwner || (isManagedAdmin && managedPermissions.manageMembers);
+  const usersForAdd = allUsers.filter((u) => !managedChat?.participants?.includes(u.id));
+
+  const openManageChat = (chat) => {
+    setManageChatId(chat.id);
+    setManageChatName(chat.name || '');
+    setSelectedAdminIds(chat.adminIds || [chat.ownerId].filter(Boolean));
+    setAdminPermissions({
+      manageInfo: chat.adminPermissions?.manageInfo ?? true,
+      manageMembers: chat.adminPermissions?.manageMembers ?? false,
+      deleteMessages: chat.adminPermissions?.deleteMessages ?? false
+    });
+    setMemberToAddId('');
+    setIsManageChatOpen(true);
+  };
+
+  const toggleAdmin = (adminId) => {
+    if (!isManagedOwner || !managedChat) return;
+    if (adminId === managedChat.ownerId) return;
+    setSelectedAdminIds((prev) => (
+      prev.includes(adminId)
+        ? prev.filter((id) => id !== adminId)
+        : [...prev, adminId]
+    ));
+  };
+
+  const handleSaveManageSettings = async (e) => {
+    e.preventDefault();
+    if (!managedChat) return;
+    const updates = {};
+    if (canManageInfo) {
+      updates.name = manageChatName;
+    }
+    if (isManagedOwner) {
+      updates.adminIds = selectedAdminIds;
+      updates.adminPermissions = adminPermissions;
+    }
+    await updateChatSettings(manageChatId, updates);
+    setIsManageChatOpen(false);
+  };
+
+  const handleAddMember = async () => {
+    if (!memberToAddId) return;
+    await addChatMembers(manageChatId, [memberToAddId]);
+    setMemberToAddId('');
+  };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -212,6 +291,16 @@ export default function Sidebar() {
               const chatDisplayName = otherUser ? (otherUser.displayName || otherUser.username) : chat.name;
               const chatAvatar = otherUser ? otherUser.avatar : null;
               const isOnline = otherUser?.lastSeen === 'online';
+              const memberCount = chat.participants?.length || 0;
+              const communityStatus = chat.type === 'group'
+                ? `${memberCount} ${pluralize(memberCount, 'участник', 'участника', 'участников')}`
+                : `${memberCount} ${pluralize(memberCount, 'подписчик', 'подписчика', 'подписчиков')}`;
+              const adminIds = chat.adminIds || [chat.ownerId].filter(Boolean);
+              const isOwner = chat.ownerId === user.id;
+              const isAdmin = adminIds.includes(user.id);
+              const canManageInfoChat = isOwner || (isAdmin && (chat.adminPermissions?.manageInfo ?? true));
+              const canManageMembersChat = isOwner || (isAdmin && (chat.adminPermissions?.manageMembers ?? false));
+              const canManageChat = chat.type !== 'dm' && (canManageInfoChat || canManageMembersChat);
               const canDelete = chat.type !== 'dm' && (chat.ownerId === user.id || user.role === 'admin');
 
               return (
@@ -233,15 +322,23 @@ export default function Sidebar() {
                     ) : (
                       chatDisplayName[0].toUpperCase()
                     )}
-                    {isOnline && (
+                    {chat.type === 'dm' && isOnline && (
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#18181b] rounded-full" />
                     )}
                     </div>
                     <div className="text-left flex-1 min-w-0">
                       <div className="text-sm font-medium text-zinc-200 truncate">{chatDisplayName}</div>
-                      <div className="text-xs text-zinc-500 truncate">{chat.lastMessage || 'Нет сообщений'}</div>
+                      <div className="text-xs text-zinc-500 truncate">{chat.type === 'dm' ? (chat.lastMessage || 'Нет сообщений') : communityStatus}</div>
                     </div>
                   </button>
+                  {canManageChat && (
+                    <button
+                      onClick={() => openManageChat(chat)}
+                      className="ml-1 px-2 py-1 rounded-lg text-[10px] text-emerald-400 hover:bg-emerald-500/10"
+                    >
+                      Управление
+                    </button>
+                  )}
                   {canDelete && (
                     <button
                       onClick={() => {
@@ -257,6 +354,30 @@ export default function Sidebar() {
                 </div>
               );
             })}
+
+            {activeTab !== 'messages' && availableCommunities
+              .filter(chat => (activeTab === 'groups' && chat.type === 'group') || (activeTab === 'channels' && chat.type === 'channel'))
+              .map(chat => (
+                <div key={chat.id} className="w-full p-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/30">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-zinc-200 truncate">{chat.name}</div>
+                      <div className="text-xs text-zinc-500">
+                        {(chat.participants?.length || 0)} {chat.type === 'group'
+                          ? pluralize(chat.participants?.length || 0, 'участник', 'участника', 'участников')
+                          : pluralize(chat.participants?.length || 0, 'подписчик', 'подписчика', 'подписчиков')}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => joinChat(chat.id)}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 flex items-center gap-1"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Вступить
+                    </button>
+                  </div>
+                </div>
+              ))}
             
             {activeTab !== 'messages' && (
               <button 
@@ -381,6 +502,111 @@ export default function Sidebar() {
             Создать
           </button>
         </form>
+      </Modal>
+
+      <Modal isOpen={isManageChatOpen} onClose={() => setIsManageChatOpen(false)} title={managedChat?.type === 'group' ? 'Управление группой' : 'Управление каналом'}>
+        {managedChat ? (
+          <form onSubmit={handleSaveManageSettings} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-500">Название</label>
+              <input
+                type="text"
+                value={manageChatName}
+                onChange={(e) => setManageChatName(e.target.value)}
+                disabled={!canManageInfo}
+                className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl focus:border-emerald-500/50 outline-none disabled:opacity-50"
+              />
+            </div>
+
+            {isManagedOwner && (
+              <div className="space-y-2">
+                <label className="text-xs text-zinc-500">Админы</label>
+                <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                  {managedMembers.map((member) => (
+                    <button
+                      type="button"
+                      key={member.id}
+                      onClick={() => toggleAdmin(member.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${
+                        selectedAdminIds.includes(member.id)
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span>{member.displayName || member.username}</span>
+                      <span>{member.id === managedChat.ownerId ? 'Владелец' : (selectedAdminIds.includes(member.id) ? 'Админ' : 'Участник')}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isManagedOwner && (
+              <div className="space-y-2">
+                <label className="text-xs text-zinc-500">Права админов</label>
+                <div className="space-y-2">
+                  <label className="flex items-center justify-between text-xs text-zinc-300">
+                    <span>Редактирование информации</span>
+                    <input type="checkbox" checked={adminPermissions.manageInfo} onChange={(e) => setAdminPermissions(prev => ({ ...prev, manageInfo: e.target.checked }))} />
+                  </label>
+                  <label className="flex items-center justify-between text-xs text-zinc-300">
+                    <span>Управление участниками</span>
+                    <input type="checkbox" checked={adminPermissions.manageMembers} onChange={(e) => setAdminPermissions(prev => ({ ...prev, manageMembers: e.target.checked }))} />
+                  </label>
+                  <label className="flex items-center justify-between text-xs text-zinc-300">
+                    <span>Удаление сообщений</span>
+                    <input type="checkbox" checked={adminPermissions.deleteMessages} onChange={(e) => setAdminPermissions(prev => ({ ...prev, deleteMessages: e.target.checked }))} />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {canManageMembers && (
+              <div className="space-y-2">
+                <label className="text-xs text-zinc-500">Добавить участника</label>
+                <div className="flex gap-2">
+                  <select
+                    value={memberToAddId}
+                    onChange={(e) => setMemberToAddId(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs outline-none focus:border-emerald-500/50"
+                  >
+                    <option value="">Выберите пользователя</option>
+                    {usersForAdd.map((u) => (
+                      <option key={u.id} value={u.id}>{u.displayName || u.username}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={handleAddMember} className="px-3 py-2 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-500">
+                    Добавить
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-500">Участники</label>
+              <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                {managedMembers.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs">
+                    <span className="text-zinc-200 truncate pr-2">{member.displayName || member.username}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {member.id === managedChat.ownerId && <span className="text-amber-500">Owner</span>}
+                      {member.id !== managedChat.ownerId && managedAdminIds.includes(member.id) && <span className="text-emerald-500">Admin</span>}
+                      {canManageMembers && member.id !== managedChat.ownerId && (
+                        <button type="button" onClick={() => removeChatMember(manageChatId, member.id)} className="text-red-400 hover:text-red-300">
+                          Удалить
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button type="submit" className="w-full py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition-all font-medium">
+              Сохранить
+            </button>
+          </form>
+        ) : null}
       </Modal>
 
       <Modal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} title="Настройки профиля">
