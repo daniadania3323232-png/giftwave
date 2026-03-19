@@ -277,7 +277,8 @@ export default function Sidebar() {
               >
                 <img src={u.avatar} className="w-10 h-10 rounded-xl bg-zinc-900" alt={u.username} />
                 <div className="text-left">
-                  <div className="text-sm font-medium text-zinc-200 group-hover:text-emerald-400 transition-colors">{u.username}</div>
+                  <div className="text-sm font-medium truncate transition-colors" style={{ color: u.nameColor || '#e4e4e7' }}>{u.displayName || u.username}</div>
+                  <div className="text-[10px] text-zinc-500 truncate">@{u.username}</div>
                   <div className="text-xs text-zinc-500 truncate w-32">{u.bio || 'Нет описания'}</div>
                 </div>
               </button>
@@ -332,7 +333,7 @@ export default function Sidebar() {
                     )}
                     </div>
                     <div className="text-left flex-1 min-w-0">
-                      <div className="text-sm font-medium text-zinc-200 truncate">{chatDisplayName}</div>
+                      <div className="text-sm font-medium truncate" style={{ color: otherUser?.nameColor || '#e4e4e7' }}>{chatDisplayName}</div>
                       <div className="text-xs text-zinc-500 truncate">
                         {chat.type === 'dm'
                           ? (chatUsername || chat.lastMessage || 'Нет сообщений')
@@ -473,7 +474,8 @@ export default function Sidebar() {
             >
               <img src={u.avatar} className="w-10 h-10 rounded-xl bg-zinc-900" alt={u.username} />
               <div className="text-left">
-                <div className="text-sm font-medium text-zinc-200">{u.username}</div>
+                <div className="text-sm font-medium" style={{ color: u.nameColor || '#e4e4e7' }}>{u.displayName || u.username}</div>
+                <div className="text-[10px] text-zinc-500">@{u.username}</div>
                 <div className="text-xs text-zinc-500">{u.bio || 'Нет описания'}</div>
               </div>
             </button>
@@ -621,7 +623,7 @@ export default function Sidebar() {
             return (
               <div key={chat.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-zinc-800 bg-zinc-900/40">
                 <div className="min-w-0">
-                  <div className="text-xs text-zinc-200 truncate">{companion?.displayName || companion?.username || 'Пользователь'}</div>
+                  <div className="text-xs truncate" style={{ color: companion?.nameColor || '#e4e4e7' }}>{companion?.displayName || companion?.username || 'Пользователь'}</div>
                   <div className="text-[10px] text-zinc-500 truncate">@{companion?.username || 'unknown'}</div>
                 </div>
                 <button
